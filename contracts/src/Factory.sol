@@ -20,7 +20,7 @@ contract Factory {
       _city,
       _realtorFee,
       _price,
-      msg.sender,
+      payable(msg.sender),
       _seller,
       _buyer);
     contracts.push(homeTransaction);
