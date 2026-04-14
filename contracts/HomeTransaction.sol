@@ -106,14 +106,24 @@ contract HomeTransaction {
         realtor.transfer(realtorFee);
     }
 
-    function anyWithdrawFromTransaction() public {
-        require(buyer == msg.sender || finalizeDeadline <= now, "Only buyer can withdraw before transaction deadline");
+    // Cancels the deal during WaitingFinalization, forfeiting the deposit:
+    // the realtor is paid (capped at the deposit so the math can't underflow)
+    // and any remainder goes to the seller. The buyer may trigger this
+    // voluntarily; after the deadline anyone may trigger it on their behalf.
+    function cancelAndForfeitDeposit() public {
+        require(
+            buyer == msg.sender || finalizeDeadline <= now,
+            "Only buyer can cancel before transaction deadline"
+        );
 
         require(contractState == ContractState.WaitingFinalization, "Wrong contract state");
 
         contractState = ContractState.Rejected;
 
-        seller.transfer(deposit-realtorFee);
-        realtor.transfer(realtorFee);
+        uint feeToRealtor = realtorFee <= deposit ? realtorFee : deposit;
+        uint toSeller = deposit - feeToRealtor;
+
+        if (feeToRealtor > 0) realtor.transfer(feeToRealtor);
+        if (toSeller > 0) seller.transfer(toSeller);
     }
 }
