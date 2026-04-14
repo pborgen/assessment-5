@@ -1,4 +1,5 @@
-pragma solidity >=0.4.25 <0.6.0;
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.20;
 
 contract HomeTransaction {
     // Constants
@@ -43,7 +44,7 @@ contract HomeTransaction {
         uint _price,
         address payable _realtor,
         address payable _seller,
-        address payable _buyer) public {
+        address payable _buyer) {
         require(_price >= _realtorFee, "Price needs to be more than realtor fee!");
 
         realtor = _realtor;
@@ -74,7 +75,7 @@ contract HomeTransaction {
         contractState = ContractState.WaitingRealtorReview;
 
         deposit = msg.value;
-        finalizeDeadline = now + timeBetweenDepositAndFinalization;
+        finalizeDeadline = block.timestamp + timeBetweenDepositAndFinalization;
     }
 
     function realtorReviewedClosingConditions(bool accepted) public {
@@ -89,7 +90,7 @@ contract HomeTransaction {
             closingConditionsReview = ClosingConditionsReview.Rejected;
             contractState = ContractState.Rejected;
 
-            buyer.transfer(deposit);
+            _send(buyer, deposit);
         }
     }
 
@@ -102,8 +103,8 @@ contract HomeTransaction {
 
         contractState = ContractState.Finalized;
 
-        seller.transfer(price-realtorFee);
-        realtor.transfer(realtorFee);
+        _send(seller, price - realtorFee);
+        _send(realtor, realtorFee);
     }
 
     // Cancels the deal during WaitingFinalization, forfeiting the deposit:
@@ -112,7 +113,7 @@ contract HomeTransaction {
     // voluntarily; after the deadline anyone may trigger it on their behalf.
     function cancelAndForfeitDeposit() public {
         require(
-            buyer == msg.sender || finalizeDeadline <= now,
+            buyer == msg.sender || finalizeDeadline <= block.timestamp,
             "Only buyer can cancel before transaction deadline"
         );
 
@@ -123,7 +124,12 @@ contract HomeTransaction {
         uint feeToRealtor = realtorFee <= deposit ? realtorFee : deposit;
         uint toSeller = deposit - feeToRealtor;
 
-        if (feeToRealtor > 0) realtor.transfer(feeToRealtor);
-        if (toSeller > 0) seller.transfer(toSeller);
+        if (feeToRealtor > 0) _send(realtor, feeToRealtor);
+        if (toSeller > 0) _send(seller, toSeller);
+    }
+
+    function _send(address payable to, uint amount) private {
+        (bool ok, ) = to.call{value: amount}("");
+        require(ok, "ETH transfer failed");
     }
 }
